@@ -1,23 +1,25 @@
 'use strict';
 
-var path = require('path'),
-    fs = require('fs'),
-    rootPath = path.normalize(__dirname + '/..'),
-    env,
-    db,
-    port,
-    b_port,
-    p2p_port;
+var path = require('path');
+var fs = require('fs');
+var mkdirp = require('mkdirp');
 
-var packageStr = fs.readFileSync('package.json');
+var rootPath = path.normalize(__dirname + '/..'),
+  env,
+  db,
+  port,
+  b_port,
+  p2p_port;
+
+var packageStr = fs.readFileSync(rootPath + '/package.json');
 var version = JSON.parse(packageStr).version;
 
 
 function getUserHome() {
-    return process.env[(process.platform == 'win32') ? 'USERPROFILE' : 'HOME'];
+  return process.env[(process.platform == 'win32') ? 'USERPROFILE' : 'HOME'];
 }
 
-var home = process.env.INSIGHT_DB || ( getUserHome()  + '/.insight' );
+var home = process.env.INSIGHT_DB || (getUserHome() + '/.insight');
 
 if (process.env.INSIGHT_NETWORK === 'livenet') {
   env = 'livenet';
@@ -25,17 +27,17 @@ if (process.env.INSIGHT_NETWORK === 'livenet') {
   port = '3000';
   b_port = '8776';
   p2p_port = '8777';
-}
-else {
+} else {
   env = 'testnet';
   db = home + '/testnet';
   port = '3001';
   b_port = '18776';
   p2p_port = '18777';
 }
+port = parseInt(process.env.INSIGHT_PORT) || port;
 
 
-switch(process.env.NODE_ENV) {
+switch (process.env.NODE_ENV) {
   case 'production':
     env += '';
     break;
@@ -61,75 +63,61 @@ if (!dataDir) {
 dataDir += network === 'testnet' ? 'testnet3' : '';
 
 var safeConfirmations = process.env.INSIGHT_SAFE_CONFIRMATIONS || 6;
-var ignoreCache      = process.env.INSIGHT_IGNORE_CACHE || 0;
+var ignoreCache = process.env.INSIGHT_IGNORE_CACHE || 0;
 
 
 var bitcoindConf = {
-  protocol:  process.env.BITCOIND_PROTO || 'http',
+  protocol: process.env.BITCOIND_PROTO || 'http',
   user: process.env.BITCOIND_USER || 'user',
   pass: process.env.BITCOIND_PASS || 'pass',
   host: process.env.BITCOIND_HOST || '127.0.0.1',
   port: process.env.BITCOIND_PORT || b_port,
   p2pPort: process.env.BITCOIND_P2P_PORT || p2p_port,
+  p2pHost: process.env.BITCOIND_P2P_HOST || process.env.BITCOIND_HOST || '127.0.0.1',
   dataDir: dataDir,
   // DO NOT CHANGE THIS!
   disableAgent: true
 };
 
-/*jshint multistr: true */
-console.log(
-'\n\
-    ____           _       __    __     ___          _ \n\
-   /  _/___  _____(_)___ _/ /_  / /_   /   |  ____  (_)\n\
-   / // __ \\/ ___/ / __ `/ __ \\/ __/  / /\| \| / __ \\/ / \n\
- _/ // / / (__  ) / /_/ / / / / /_   / ___ |/ /_/ / /  \n\
-/___/_/ /_/____/_/\\__, /_/ /_/\\__/  /_/  |_/ .___/_/   \n\
-                 /____/                   /_/           \n\
-\n\t\t\t\t\t\tv%s\n\
-  # Configuration:\n\
-\t\tNetwork: %s\tINSIGHT_NETWORK\n\
-\t\tDatabase Path:  %s\tINSIGHT_DB\n\
-\t\tSafe Confirmations:  %s\tINSIGHT_SAFE_CONFIRMATIONS\n\
-\t\tIgnore Cache:  %s\tINSIGHT_IGNORE_CACHE\n\
- # Bicoind Connection configuration:\n\
-\t\tRPC Username: %s\tBITCOIND_USER\n\
-\t\tRPC Password: %s\tBITCOIND_PASS\n\
-\t\tRPC Protocol: %s\tBITCOIND_PROTO\n\
-\t\tRPC Host: %s\tBITCOIND_HOST\n\
-\t\tRPC Port: %s\tBITCOIND_PORT\n\
-\t\tP2P Port: %s\tBITCOIND_P2P_PORT\n\
-\t\tData Dir: %s\tBITCOIND_DATADIR\n\
-\t\t%s\n\
-\nChange setting by assigning the enviroment variables in the last column. Example:\n\
- $ INSIGHT_NETWORK="testnet" BITCOIND_HOST="123.123.123.123" ./insight.js\
-\n\n',
-version,
-network, home, safeConfirmations, ignoreCache?'yes':'no',
-bitcoindConf.user,
-bitcoindConf.pass?'Yes(hidden)':'No',
-bitcoindConf.protocol,
-bitcoindConf.host,
-bitcoindConf.port,
-bitcoindConf.p2pPort,
-dataDir+(network==='testnet'?'*':''),
-(network==='testnet'?'* (/testnet3 is added automatically)':'')
-);
+var enableMonitor = process.env.ENABLE_MONITOR === 'true';
+var enableCleaner = process.env.ENABLE_CLEANER === 'true';
+var enableMailbox = process.env.ENABLE_MAILBOX === 'true';
+var enableRatelimiter = process.env.ENABLE_RATELIMITER === 'true';
+var enableCredentialstore = process.env.ENABLE_CREDSTORE === 'true';
+var enableEmailstore = process.env.ENABLE_EMAILSTORE === 'true';
+var enablePublicInfo = process.env.ENABLE_PUBLICINFO === 'true';
+var loggerLevel = process.env.LOGGER_LEVEL || 'info';
+var enableHTTPS = process.env.ENABLE_HTTPS === 'true';
 
-
-if (! fs.existsSync(db)){
-
-  console.log('## ERROR ##\n\tDB Directory "%s" not found. \n\tCreate it, move your old DB there or set the INSIGHT_DB environment variable.\n\tNOTE: In older insight-api versions, db was stored at <insight-root>/db', db);
-  process.exit(-1);
+if (!fs.existsSync(db)) {
+  mkdirp.sync(db);
 }
 
 module.exports = {
+  enableMonitor: enableMonitor,
+  monitor: require('../plugins/config-monitor.js'),
+  enableCleaner: enableCleaner,
+  cleaner: require('../plugins/config-cleaner.js'),
+  enableMailbox: enableMailbox,
+  mailbox: require('../plugins/config-mailbox.js'),
+  enableRatelimiter: enableRatelimiter,
+  ratelimiter: require('../plugins/config-ratelimiter.js'),
+  enableCredentialstore: enableCredentialstore,
+  credentialstore: require('../plugins/config-credentialstore'),
+  enableEmailstore: enableEmailstore,
+  emailstore: require('../plugins/config-emailstore'),
+  enablePublicInfo: enablePublicInfo,
+  publicInfo: require('../plugins/publicInfo/config'),
+  loggerLevel: loggerLevel,
+  enableHTTPS: enableHTTPS,
+  version: version,
   root: rootPath,
   publicPath: process.env.INSIGHT_PUBLIC_PATH || false,
   appName: 'Insight ' + env,
   apiPrefix: '/api',
   port: port,
   leveldb: db,
-  bitcoind: bitcoindConf, 
+  bitcoind: bitcoindConf,
   network: network,
   disableP2pSync: false,
   disableHistoricSync: false,
